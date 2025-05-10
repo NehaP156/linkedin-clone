@@ -1,88 +1,85 @@
-const express = require('express');
-const bcrypt = require('bcrypt');
-const pool = require('./db'); // PostgreSQL connection from db.js
+require("dotenv").config();
+const express = require("express");
+const path = require("path");
+const pool = require("./db"); // PostgreSQL connection
+const authRoutes = require("./routes/auth");
+const authenticateToken = require("./middleware/authMiddleware");
 
 const app = express();
-app.use(express.json());
 
-// ✅ Test DB connection on startup
+// Middleware
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
+
+// Confirm DB connection on server start
 (async () => {
   try {
-    const result = await pool.query('SELECT NOW()');
-    console.log('✅ Connected to PostgreSQL at:', result.rows[0].now);
+    const result = await pool.query("SELECT NOW()");
+    console.log("✅ Connected to PostgreSQL at:", result.rows[0].now);
   } catch (err) {
-    console.error('❌ Failed to connect to PostgreSQL:', err.message);
+    console.error("❌ PostgreSQL connection failed:", err.message);
   }
 })();
 
-// ✅ Home route
-app.get('/', (req, res) => {
-  res.send('LinkedIn Clone Backend is running!');
+// Routes
+app.get("/", (req, res) => {
+  res.send("LinkedIn Clone Backend is running!");
 });
 
-// ✅ Register route
-app.post('/register', async (req, res) => {
-  const { username, password } = req.body;
+app.use("/", authRoutes);
 
+app.get("/protected", authenticateToken, (req, res) => {
+  res.send(`Hello, ${req.user.username}. This is a protected route!`);
+});
+
+app.get("/profile/:username", async (req, res) => {
+  const { username } = req.params;
   try {
-    // Check if user already exists
-    const userCheck = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-
-    if (userCheck.rows.length > 0) {
-      return res.status(400).send('User already exists');
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insert new user
-    await pool.query(
-      'INSERT INTO users (username, password) VALUES ($1, $2)',
-      [username, hashedPassword]
+    const { rows } = await pool.query(
+      "SELECT username FROM users WHERE username = $1",
+      [username],
     );
 
-    res.send('User registered successfully!');
+    if (rows.length === 0) return res.status(404).send("User not found");
+
+    res.json(rows[0]);
   } catch (err) {
-    console.error('Error during registration:', err.message);
-    res.status(500).send('Registration failed');
+    console.error("Profile fetch error:", err.message);
+    res.status(500).send("Failed to fetch profile");
   }
 });
 
-// ✅ Login route
-app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+app.put("/profile/:username", async (req, res) => {
+  const { username } = req.params;
+  const { bio, title } = req.body;
 
   try {
-    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    const user = result.rows[0];
+    const { rows } = await pool.query(
+      "UPDATE users SET bio = $1, title = $2 WHERE username = $3 RETURNING username, bio, title",
+      [bio, title, username],
+    );
 
-    if (!user) {
-      return res.status(401).send('Invalid username');
-    }
+    if (rows.length === 0) return res.status(404).send("User not found");
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).send('Invalid password');
-    }
-
-    res.send('Login successful!');
+    res.json(rows[0]);
   } catch (err) {
-    console.error('Login error:', err.message);
-    res.status(500).send('Login failed');
+    console.error("Update error:", err.message);
+    res.status(500).send("Failed to update profile");
   }
 });
 
-// ✅ Optional: View all users (for testing only — remove in production)
-app.get('/users', async (req, res) => {
+// Test route for user list
+app.get("/users", async (req, res) => {
   try {
-    const result = await pool.query('SELECT username FROM users');
-    res.json(result.rows);
+    const { rows } = await pool.query("SELECT username FROM users");
+    res.json(rows);
   } catch (err) {
-    res.status(500).send('Failed to fetch users');
+    console.error("Fetch users error:", err.message);
+    res.status(500).send("Failed to fetch users");
   }
 });
 
-// ✅ Start server
+// Server start
 app.listen(3000, () => {
-  console.log('Server is running at http://localhost:3000');
+  console.log("🚀 Server running at http://localhost:3000");
 });

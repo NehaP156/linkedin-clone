@@ -1,0 +1,59 @@
+<!-- public/profile.html -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>User Profile</title>
+  </head>
+  <body>
+    <h2>User Profile</h2>
+
+    <label>Username: </label>
+    <input type="text" id="username" placeholder="Enter username" />
+    <button onclick="loadProfile()">Load Profile</button>
+
+    <div id="profile" style="display: none">
+      <h3>Edit Profile</h3>
+      <label>Bio:</label><br />
+      <textarea id="bio" rows="4" cols="40"></textarea><br />
+      <label>Title:</label><br />
+      <input type="text" id="title" /><br /><br />
+      <button onclick="updateProfile()">Update</button>
+    </div>
+
+    <script>
+      async function loadProfile() {
+        const username = document.getElementById("username").value;
+        const res = await fetch(`http://localhost:3000/profile/${username}`);
+
+        if (!res.ok) {
+          alert("User not found");
+          return;
+        }
+
+        const data = await res.json();
+        document.getElementById("bio").value = data.bio || "";
+        document.getElementById("title").value = data.title || "";
+        document.getElementById("profile").style.display = "block";
+      }
+
+      async function updateProfile() {
+        const username = document.getElementById("username").value;
+        const bio = document.getElementById("bio").value;
+        const title = document.getElementById("title").value;
+
+        const res = await fetch(`http://localhost:3000/profile/${username}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bio, title }),
+        });
+
+        if (res.ok) {
+          alert("Profile updated!");
+        } else {
+          alert("Update failed");
+        }
+      }
+    </script>
+  </body>
+</html>
